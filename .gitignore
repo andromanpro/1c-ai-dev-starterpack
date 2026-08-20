@@ -1,0 +1,22 @@
+# Скачанное и собранное — не коммитим
+_downloads/
+*.zip
+*.jar
+*.cf
+*.cfe
+*.dt
+*.epf
+*.erf
+
+# Служебное
+__pycache__/
+*.pyc
+.venv/
+.idea/
+.vscode/
+.serena/
+
+# Отчёты прогонов
+*.junit.xml
+allure-results/
+sonar-report*/

@@ -47,6 +47,7 @@ try:
     print("  py -3.14 <набор>/tools/handoff-facts.py <репо> --last 15")
     print("Рассказ — поверх фактов. «✅ прошлой сессии» = непроверенное утверждение.")
     print("=" * 68)
-except Exception:
-    pass
+except Exception as e:
+    # Не ломаем поток инструмента, но и не молчим — тишина превращает защиту в дыру
+    print(f"[starter-facts] проверка не отработала: {type(e).__name__}: {e}", file=sys.stderr)
 sys.exit(0)

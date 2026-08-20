@@ -73,12 +73,24 @@ def fragment_allowed(fragment: str) -> bool:
     return any(a in low for a in ALLOW_FRAGMENT)
 
 
+MD_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+
+
 def scan_file(path: Path, deny: list[str], lang_check: bool = True):
     findings, warnings = [], []
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return findings, warnings
+    if path.suffix.lower() == ".md":
+        for n, line in enumerate(text.splitlines(), 1):
+            for m in MD_LINK.finditer(line):
+                target = m.group(1)
+                if target.startswith(("http://", "https://", "#", "mailto:")):
+                    continue
+                rel = target.split("#")[0]
+                if rel and not (path.parent / rel).exists():
+                    findings.append((path, n, "битая ссылка", rel))
     for n, line in enumerate(text.splitlines(), 1):
         for rx, what, mask in SECRETS:
             if rx.search(line):
