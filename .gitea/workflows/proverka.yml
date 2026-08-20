@@ -2,13 +2,11 @@ name: проверка-публикации
 on: [push, pull_request]
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: windows-1c
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - name: Самотест проверки (грязная фикстура обязана краснить)
-        run: python tools/validate.py --selftest
+        run: py -3.14 tools/validate.py --selftest
       - name: Проверка репозитория (публичный слой)
-        run: python tools/validate.py
+        run: py -3.14 tools/validate.py
