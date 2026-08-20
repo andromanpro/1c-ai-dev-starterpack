@@ -28,6 +28,7 @@ import sys
 
 sys.stdout.reconfigure(encoding="utf-8")
 
+# Матчер имён файлов: слова-варианты нужны здесь по назначению (ловим и старые имена)
 NAME_RX = re.compile(r"(СТАРТЕР|СТАРТ[_-]|starter|hand-?off|хэндофф|хендофф)", re.I)
 MARKER = "handoff-facts"
 
@@ -41,10 +42,10 @@ try:
     if MARKER in content:
         sys.exit(0)
     print("=" * 68)
-    print("[starter-facts] Пишешь стартер/хэндофф БЕЗ фактового блока.")
+    print("[starter-facts] Пишешь стартер сессии БЕЗ фактового блока.")
     print("Фактовую часть НЕ писать руками — сгенерировать и вклеить:")
     print("  py -3.14 <набор>/tools/handoff-facts.py <репо> --last 15")
-    print("Нарратив — поверх фактов. «✅ прошлой сессии» = непроверенное утверждение.")
+    print("Рассказ — поверх фактов. «✅ прошлой сессии» = непроверенное утверждение.")
     print("=" * 68)
 except Exception:
     pass

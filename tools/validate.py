@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Проверка перед публикацией: секреты, адреса, личные пути, приватный словарь, англицизмы.
+"""Проверка перед публикацией: секреты, адреса, личные пути, приватный словарь, язык.
 
-Публичный слой (этот файл, в репозитории): общие проверки + самотест.
-Приватный слой (у владельца, ВНЕ репозитория): словарь запрещённых имён,
-подключается параметром --deny-file или лежит в <репо>/../_private/словарь-запретов.txt.
-В CI приватного словаря нет — проверка сообщает об этом и не падает;
-перед экспортом наружу запуск с приватным словарём обязателен (--require-deny).
+Публичный слой (этот файл, в репозитории): общие классы утечек + самотест
+на встроенных образцах (файлов-фикстур нет намеренно: образец «грязи» в публичном
+репозитории сам был бы утечкой и кормом для сторонних сканеров секретов).
+Приватный слой (у владельца, ВНЕ репозитория): словарь запрещённых имён —
+параметр --deny-file или <репо>/../_private/словарь-запретов.txt.
+В CI приватного словаря нет — проверка сообщает и не падает; перед экспортом
+наружу обязателен запуск с --require-deny.
 
-Запуск:  py -3.14 tools/validate.py [--selftest] [--deny-file ПУТЬ] [--require-deny] [--strict-lang]
+Найденные секреты в вывод НЕ печатаются (маскируются) — журнал CI публичен.
+
+Запуск:  py -3 tools/validate.py [--selftest] [--deny-file ПУТЬ] [--require-deny] [--strict-lang]
 Выход: 0 — чисто; 1 — нарушения или провал самотеста.
 """
 import argparse
@@ -18,52 +22,55 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8")
 
 REPO = Path(__file__).resolve().parent.parent
-SCAN_EXT = {".md", ".txt", ".yml", ".yaml", ".json", ".py", ".bsl", ".os", ".feature"}
-SKIP_DIRS = {".git", "fixtures", "__pycache__", "node_modules"}
-# Сам валидатор — единственный файл, которому положено содержать запрещённые образцы.
-# Файл терминов — словарь замен, ему положено содержать англицизмы (см. lang_check).
+SCAN_EXT = {
+    ".md", ".txt", ".yml", ".yaml", ".json", ".py", ".bsl", ".os", ".feature",
+    ".toml", ".ini", ".cfg", ".env", ".ps1", ".bat", ".cmd", ".xml", ".sh",
+}
+SKIP_DIRS = {".git", "__pycache__", "node_modules"}
+# Сам валидатор — единственный файл, которому положено содержать образцы запретов.
+# Файл терминов — словарь замен, ему положено содержать англицизмы.
 SKIP_FILES = {"validate.py"}
-NO_LANG_CHECK_FILES = {"термины.md"}
+NO_LANG_CHECK_FILES = {"термины.md", "starter-facts-guard.py"}
 
-# Секреты и ключи — без исключений
+# (образец, название, маскировать_ли_фрагмент)
 SECRETS = [
-    (re.compile(r"ghp_[A-Za-z0-9]{20,}"), "токен GitHub"),
-    (re.compile(r"github_pat_[A-Za-z0-9_]{20,}"), "токен GitHub (fine-grained)"),
-    (re.compile(r"sk-[A-Za-z0-9_-]{20,}"), "ключ API (sk-)"),
-    (re.compile(r"BEGIN [A-Z ]*PRIVATE KEY"), "приватный ключ"),
-    (re.compile(r"Authorization:\s*(token|Bearer)\s+\S{16,}", re.I), "заголовок авторизации со значением"),
-    (re.compile(r"(пароль|password)\s*[=:]\s*\S+", re.I), "пароль в открытом виде"),
+    (re.compile(r"ghp_[A-Za-z0-9]{20,}"), "токен GitHub", True),
+    (re.compile(r"github_pat_[A-Za-z0-9_]{20,}"), "токен GitHub (fine-grained)", True),
+    (re.compile(r"sk-[A-Za-z0-9_-]{20,}"), "ключ API (sk-)", True),
+    (re.compile(r"BEGIN [A-Z ]*PRIVATE KEY"), "приватный ключ", True),
+    (re.compile(r"Authorization:\s*(token|Bearer)\s+\S{16,}", re.I), "заголовок авторизации со значением", True),
+    (re.compile(r"(пароль|password)\s*[=:]\s*\S+", re.I), "пароль в открытом виде", True),
 ]
 
-# Внутренние адреса — без исключений
-NETWORK = [
-    (re.compile(r"\b192\.168\.\d{1,3}\.\d{1,3}\b"), "внутренний IP-адрес"),
-    (re.compile(r"\b172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b"), "внутренний IP-адрес"),
-]
+PRIVATE_IP = re.compile(
+    r"\b(192\.168|172\.(?:1[6-9]|2\d|3[01])|10)\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b"
+)
 
-# Личные пути и следы машины автора — допускают разрешённые исключения
+# Личные следы; допускают разрешённые исключения по САМОМУ совпадению
 PERSONAL = [
-    (re.compile(r"[FfDdGg]:[\\/]+WorkAI", re.I), "личный путь (WorkAI)"),
-    (re.compile(r"[Cc]:[\\/]+Users[\\/]+(?!ИмяПользователя|<)", ), "личный путь (C:/Users/)"),
-    (re.compile(r"[Dd]:[\\/]+home\b"), "личный путь (D:/home)"),
-    (re.compile(r"EDT_Workspace"), "личный путь (EDT_Workspace)"),
-    (re.compile(r"\bRoono\b"), "имя учётной записи автора"),
-    (re.compile(r"[\w.+-]+@(?!example\.|носайта\.)[\w-]+\.\w{2,}"), "адрес почты"),
+    (re.compile(r"[A-Za-z]:[\\/]+Users[\\/]+(?!ИмяПользователя|<)[^\\/\s\"']+"), "личный путь (Users)"),
+    (re.compile(r"[\w.+-]+@[\w-]+\.\w{2,}"), "адрес почты"),
 ]
+ALLOW_FRAGMENT = ("example.", "носайта.", "noreply", "androman.pro")
 
-# Разрешённые исключения — только для категории PERSONAL (намеренная атрибуция)
-ALLOW = ("androman.pro", "Roman Andriyanov", "andromanpro", "noreply"),
-
-# Англицизмы (предупреждение; --strict-lang превращает в нарушение)
 LANG = re.compile(
     r"\b(гейт\w*|скилл\w*|воркфлоу\w*|сетап\w*|квикстарт\w*|роадмап\w*|стейджинг\w*"
-    r"|скоуп\w*|смоук\w*|аллоулист\w*|quickstart|hardening|allowlist|DoD)\b",
+    r"|скоуп\w*|смоук\w*|аллоулист\w*|хэндофф\w*|хендофф\w*|нарратив\w*|залогир\w*"
+    r"|quickstart|hardening|allowlist|environment|troubleshooting|end-to-end|DoD)\b",
     re.I,
 )
 
 
-def line_allowed(line: str) -> bool:
-    return any(a in line for a in ALLOW[0])
+def ip_is_real(m: re.Match) -> bool:
+    try:
+        return all(int(m.group(i)) <= 255 for i in (2, 3, 4))
+    except ValueError:
+        return False
+
+
+def fragment_allowed(fragment: str) -> bool:
+    low = fragment.lower()
+    return any(a in low for a in ALLOW_FRAGMENT)
 
 
 def scan_file(path: Path, deny: list[str], lang_check: bool = True):
@@ -73,16 +80,20 @@ def scan_file(path: Path, deny: list[str], lang_check: bool = True):
     except OSError:
         return findings, warnings
     for n, line in enumerate(text.splitlines(), 1):
-        for rx, what in SECRETS + NETWORK:
+        for rx, what, mask in SECRETS:
             if rx.search(line):
-                findings.append((path, n, what, line.strip()[:100]))
+                findings.append((path, n, what, "«скрыто»" if mask else line.strip()[:100]))
+        m = PRIVATE_IP.search(line)
+        if m and ip_is_real(m):
+            findings.append((path, n, "внутренний IP-адрес", "«скрыто»"))
         for rx, what in PERSONAL:
-            if rx.search(line) and not line_allowed(line):
-                findings.append((path, n, what, line.strip()[:100]))
+            m = rx.search(line)
+            if m and not fragment_allowed(m.group(0)):
+                findings.append((path, n, what, m.group(0)[:80]))
         low = line.lower()
         for word in deny:
             if word in low:
-                findings.append((path, n, f"запрещённое имя «{word}»", line.strip()[:100]))
+                findings.append((path, n, f"запрещённое имя «{word}»", "строка скрыта"))
         if lang_check:
             m = LANG.search(line)
             if m:
@@ -121,24 +132,53 @@ def load_deny(args) -> tuple[list[str], bool]:
     return [], False
 
 
+def _dirty_sample() -> str:
+    # Образцы собираются конкатенацией, чтобы файл валидатора сам не выглядел утечкой
+    return "\n".join([
+        "Токен утёк: " + "ghp_" + "A" * 30,
+        "Сервер живёт на 192.168." + "77.55 — внутренняя сеть.",
+        "Профиль лежит в " + "C:/Users/" + "Иванов77/.claude/settings.json",
+        "Пишите на ящик " + "vasya.pupkin" + "@" + "primer-pochty.ru",
+        "Пароль = " + "СуперСекрет123",
+        "По проекту " + "тестзапретноеимя" + " вопросы к аналитику.",
+    ])
+
+
+def _clean_sample() -> str:
+    return "\n".join([
+        "Обычный текст инструкции. Скопируйте базу в C:/Users/ИмяПользователя/базы/копия.",
+        "Версия платформы 8.3.27, сборка Windows 10.0.19045 — не адрес.",
+        "Пример почты в документации: support@example.com.",
+        "Автор набора: Roman Andriyanov (androman.pro).",
+        "Правки вносите через PR, сборка проверяется CI.",
+    ])
+
+
 def selftest() -> int:
-    fx = REPO / "tools" / "tests" / "fixtures"
-    deny = [
-        w.strip().lower()
-        for w in (fx / "тест-словарь.txt").read_text(encoding="utf-8").splitlines()
-        if w.strip() and not w.startswith("#")
-    ]
-    dirty_f, _ = scan_file(fx / "грязная.md", deny)
-    clean_f, _ = scan_file(fx / "чистая.md", deny)
-    kinds = {what for _, _, what, _ in dirty_f}
+    import tempfile, os
+    deny = ["тестзапретноеимя"]
     ok = True
-    if len(dirty_f) < 5 or len(kinds) < 4:
-        print(f"САМОТЕСТ ПРОВАЛЕН: грязная фикстура дала {len(dirty_f)} наход. / {len(kinds)} категорий (ждали >=5 / >=4)")
+    with tempfile.TemporaryDirectory() as td:
+        dirty = Path(td) / "грязный-образец.md"
+        clean = Path(td) / "чистый-образец.md"
+        dirty.write_text(_dirty_sample(), encoding="utf-8")
+        clean.write_text(_clean_sample(), encoding="utf-8")
+        dirty_f, _ = scan_file(dirty, deny)
+        clean_f, _ = scan_file(clean, deny)
+    kinds = {what for _, _, what, _ in dirty_f}
+    if len(dirty_f) < 5 or len(kinds) < 5:
+        print(f"САМОТЕСТ ПРОВАЛЕН: грязный образец дал {len(dirty_f)} наход. / {len(kinds)} категорий (ждали >=5 / >=5)")
         ok = False
     if clean_f:
-        print(f"САМОТЕСТ ПРОВАЛЕН: чистая фикстура дала {len(clean_f)} находок (ждали 0)")
+        print(f"САМОТЕСТ ПРОВАЛЕН: чистый образец дал {len(clean_f)} находок (ждали 0)")
         for p, n, what, frag in clean_f:
-            print(f"  {p.name}:{n} {what}: {frag}")
+            print(f"  строка {n}: {what}: {frag}")
+        ok = False
+    # Маскирование: секретные категории не должны попадать в вывод фрагментом
+    masked = all(frag == "«скрыто»" for _, _, what, frag in dirty_f
+                 if what in {w for _, w, m in SECRETS if m} or what == "внутренний IP-адрес")
+    if not masked:
+        print("САМОТЕСТ ПРОВАЛЕН: секретная находка напечатана открытым текстом")
         ok = False
     print("Самотест: ПРОЙДЕН" if ok else "Самотест: ПРОВАЛ")
     return 0 if ok else 1
