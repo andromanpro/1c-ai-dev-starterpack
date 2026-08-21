@@ -28,16 +28,46 @@ def strip_comments(text: str) -> str:
     return "\n".join(line.split("//", 1)[0] for line in text.splitlines())
 
 
+def inside_loop(text: str, needle: str) -> bool:
+    """Есть ли вхождение `needle` внутри любого цикла, с учётом вложенности.
+
+    Раньше цикл выделялся шаблоном `Для Каждого.*?КонецЦикла`. Нежадный шаблон
+    обрывается на ПЕРВОМ `КонецЦикла`, поэтому вложенный цикл прятал от проверки
+    всё, что стояло после него: заглушка вида
+
+        Для Каждого Строка Из Список Цикл
+            Для Каждого Пусто Из Новый Массив Цикл
+            КонецЦикла;
+            Контрагент = Справочники.Контрагенты.НайтиПоНаименованию(...);
+        КонецЦикла;
+
+    давала зелёную проверку при нетронутом дефекте. Контрольная точка, которую
+    можно обойти формой записи, проверяет форму, а не суть.
+
+    Здесь считается глубина: каждое ключевое слово `Цикл` открывает уровень,
+    `КонецЦикла` закрывает. Вхождение засчитывается, если в его позиции
+    глубина больше нуля.
+    """
+    depth = 0
+    for m in re.finditer(r"\b(Цикл|КонецЦикла|" + re.escape(needle) + r")\b", text, re.I):
+        token = m.group(1)
+        if token.lower() == "цикл":
+            depth += 1
+        elif token.lower() == "конеццикла":
+            depth = max(0, depth - 1)
+        elif depth > 0:
+            return True
+    return False
+
+
 def check(text: str) -> list[tuple[str, bool]]:
     text = strip_comments(text)
     results = []
 
     # 1. Поиск убран из цикла обхода заказов, взамен появился запрос (и не в цикле)
-    loop = re.search(r"Для\s+Каждого.*?КонецЦикла", text, re.S | re.I)
-    loop_text = loop.group(0) if loop else ""
-    find_in_loop = bool(re.search(r"НайтиПоНаименованию", loop_text, re.I))
+    find_in_loop = inside_loop(text, "НайтиПоНаименованию")
     query_anywhere = bool(re.search(r"Новый\s+Запрос", text, re.I))
-    query_in_loop = bool(re.search(r"Новый\s+Запрос", loop_text, re.I))
+    query_in_loop = inside_loop(text, "Новый")
     results.append(("поиск вынесен из цикла, контрагенты получены запросом",
                     (not find_in_loop) and query_anywhere and (not query_in_loop)))
 

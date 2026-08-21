@@ -107,7 +107,15 @@ def main() -> int:
                 suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
                 t = sum(int(s.get("tests", 0)) for s in suites)
                 fails = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
-                verdict = "зелёный" if fails == 0 else f"КРАСНЫЙ ({fails} провалов)"
+                # Ноль тестов — это не успех, а несостоявшаяся проверка: так выглядит
+                # опечатка в фильтре, переименованный модуль и потерянный отчёт.
+                # Правило 04.10: не смог измерить — красный.
+                if t == 0:
+                    verdict = "НЕТ ТЕСТОВ — проверка не состоялась"
+                elif fails == 0:
+                    verdict = "зелёный"
+                else:
+                    verdict = f"КРАСНЫЙ ({fails} провалов)"
                 lines.append(f"- `{p.name}`: {t} тестов, {verdict}{stale}")
             except ET.ParseError:
                 lines.append(f"- `{p.name}`: НЕ РАЗОБРАН (битый XML){stale}")
