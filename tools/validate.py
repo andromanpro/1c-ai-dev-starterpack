@@ -12,6 +12,8 @@
 Найденные секреты в вывод НЕ печатаются (маскируются) — журнал CI публичен.
 
 Запуск:  py -3 tools/validate.py [--selftest] [--deny-file ПУТЬ] [--require-deny] [--strict-lang]
+         [--git-log ДИАПАЗОН] — проверить и сообщения коммитов: файл перед публикацией
+         можно вычистить, а сообщение коммита уезжает в историю навсегда.
 Выход: 0 — чисто; 1 — нарушения или провал самотеста.
 """
 import argparse
@@ -128,6 +130,46 @@ def scan_tree(root: Path, deny: list[str]):
     return findings, warnings
 
 
+def scan_commit_messages(root: Path, deny: list[str], rev_range: str):
+    """Те же правила — по сообщениям коммитов, а не по файлам.
+
+    Отдельная поверхность утечки: файл можно вычистить перед публикацией, а
+    сообщение коммита уезжает в публичную историю навсегда и правится только
+    переписыванием истории (а после публикации — ещё и с обращением к хостингу
+    за удалением висячих объектов). Проверка файлов этого не видит — ровно так
+    имена внутренних систем и попадают наружу.
+
+    Возвращает (находки, удалось_ли_прочитать): «не репозиторий» и «нет
+    коммитов» обязаны отличаться от «чисто», иначе молчание сойдёт за успех.
+    """
+    import subprocess
+
+    marker = "@@КОММИТ@@"
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "log", "--format=" + marker + "%h %s %b", rev_range],
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
+    except OSError:
+        return [], False
+    if out.returncode != 0:
+        return [], False
+
+    findings = []
+    for chunk in out.stdout.split(marker):
+        message = " ".join(chunk.split())
+        if not message:
+            continue
+        sha = message.split(" ", 1)[0]
+        low = message.lower()
+        for rx, what, mask in SECRETS:
+            if rx.search(message):
+                findings.append((sha, what, "«скрыто»"))
+        for word in deny:
+            if word in low:
+                findings.append((sha, "запрещённое имя «" + word + "»", "сообщение скрыто"))
+    return findings, True
+
+
 def load_deny(args) -> tuple[list[str], bool]:
     candidates = []
     if args.deny_file:
@@ -202,6 +244,8 @@ def main() -> int:
     ap.add_argument("--deny-file")
     ap.add_argument("--require-deny", action="store_true")
     ap.add_argument("--strict-lang", action="store_true")
+    ap.add_argument("--git-log", metavar="ДИАПАЗОН",
+                    help="проверить и сообщения коммитов, напр. origin/main..HEAD или --all")
     args = ap.parse_args()
 
     if args.selftest:
@@ -224,8 +268,19 @@ def main() -> int:
     if len(warnings) > len(shown):
         print(f"... и ещё {len(warnings) - len(shown)} предупреждений о языке")
 
-    print(f"Итог: нарушений {len(findings)}, предупреждений {len(warnings)}")
-    if findings:
+    commit_findings = []
+    if args.git_log:
+        commit_findings, ran = scan_commit_messages(REPO, deny, args.git_log)
+        if not ran:
+            print(f"ОШИБКА: не удалось прочитать историю git по диапазону «{args.git_log}»")
+            return 1
+        for sha, what, frag in commit_findings:
+            print(f"НАРУШЕНИЕ коммит {sha} [{what}] {frag}")
+
+    total = len(findings) + len(commit_findings)
+    tail = f" (в сообщениях коммитов: {len(commit_findings)})" if commit_findings else ""
+    print(f"Итог: нарушений {total}, предупреждений {len(warnings)}" + tail)
+    if findings or commit_findings:
         return 1
     if args.strict_lang and warnings:
         return 1
