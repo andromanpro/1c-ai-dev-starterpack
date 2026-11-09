@@ -27,6 +27,7 @@ REPO = Path(__file__).resolve().parent.parent
 SCAN_EXT = {
     ".md", ".txt", ".yml", ".yaml", ".json", ".py", ".bsl", ".os", ".feature",
     ".toml", ".ini", ".cfg", ".env", ".ps1", ".bat", ".cmd", ".xml", ".sh",
+    ".svg", ".mmd",
 }
 SKIP_DIRS = {".git", "__pycache__", "node_modules"}
 # Сам валидатор — единственный файл, которому положено содержать образцы запретов.
@@ -101,6 +102,12 @@ def scan_file(path: Path, deny: list[str], lang_check: bool = True):
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return findings, warnings
+    return scan_text(path, text, deny, lang_check)
+
+
+def scan_text(path: Path, text: str, deny: list[str], lang_check: bool = True):
+    """Проверяет прочитанный снимок, в том числе содержимое будущего архива."""
+    findings, warnings = [], []
     if path.suffix.lower() == ".md":
         for n, line in enumerate(text.splitlines(), 1):
             for m in MD_LINK.finditer(line):

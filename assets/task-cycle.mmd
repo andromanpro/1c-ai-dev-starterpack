@@ -1,0 +1,6 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial","fontSize":"18px","primaryColor":"#fff5e2","primaryTextColor":"#292622","primaryBorderColor":"#d7922e","lineColor":"#75634a"}}}%%
+flowchart LR
+    H["Человек<br/>Цель и границы"] --> A["Агент<br/>Анализ и правка на копии"]
+    A --> V["Проверка<br/>Код · метаданные · поведение"]
+    V --> R["Приёмка<br/>Diff и свидетельства"]
+    V -->|Дефект| A

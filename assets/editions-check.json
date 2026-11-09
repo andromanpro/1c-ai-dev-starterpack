@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-09",
+  "os": "Windows",
+  "python": "3.14.10",
+  "source_base_revision": "6c2f94088a3358d9adf295cf09937a43992742dc",
+  "source_sha256": {
+    "tools/build_editions.py": "316eb79202a62c2d90de17b78bb5649be9ff063701ce1647e77b01adfbf9a6fa",
+    "tools/test_editions.py": "4e198a84617897ceaf14cd846d50a94c7f45363eeedfbbb52ee7f9d8247f63ca",
+    "tools/validate.py": "941e257ea1ed7987182c107fe2a7d9f3d4596fa04052455dcdd860d6fc3632a6"
+  },
+  "runs": [
+    {
+      "command": "py -3.14 tools/build_editions.py --selftest",
+      "expected_exit": 0,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_both_editions_checked_before_output (test_editions.EditionTests.test_both_editions_checked_before_output) ... ok\ntest_common_bytes_and_separate_compositions (test_editions.EditionTests.test_common_bytes_and_separate_compositions) ... ok\ntest_duplicate_path (test_editions.EditionTests.test_duplicate_path) ... ok\ntest_existing_output_preserved (test_editions.EditionTests.test_existing_output_preserved) ... ok\ntest_link_escape (test_editions.EditionTests.test_link_escape) ... ok\ntest_missing_tracked_file (test_editions.EditionTests.test_missing_tracked_file) ... ok\ntest_nested_validator_name_is_scanned (test_editions.EditionTests.test_nested_validator_name_is_scanned) ... ok\ntest_omitted_link_target (test_editions.EditionTests.test_omitted_link_target) ... ok\ntest_private_deny_dictionary (test_editions.EditionTests.test_private_deny_dictionary) ... ok\ntest_receipt_name_is_reserved_case_insensitively (test_editions.EditionTests.test_receipt_name_is_reserved_case_insensitively) ... ok\ntest_repeatable_bytes_and_receipt_of_dirty_tree (test_editions.EditionTests.test_repeatable_bytes_and_receipt_of_dirty_tree) ... ok\ntest_secret_in_tracked_file (test_editions.EditionTests.test_secret_in_tracked_file) ... ok\ntest_symlink_in_git_index (test_editions.EditionTests.test_symlink_in_git_index) ... ok\ntest_unsafe_paths (test_editions.EditionTests.test_unsafe_paths) ... ok\ntest_untracked_private_file (test_editions.EditionTests.test_untracked_private_file) ... ok\n\n----------------------------------------------------------------------\nRan 15 tests in 3.283s\n\nOK\n"
+    },
+    {
+      "command": "py -3.14 tools/validate.py --selftest",
+      "expected_exit": 0,
+      "exit_code": 0,
+      "stdout": "Самотест: ПРОЙДЕН\n",
+      "stderr": ""
+    }
+  ]
+}
