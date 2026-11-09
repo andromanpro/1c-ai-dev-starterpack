@@ -12,3 +12,15 @@ jobs:
         run: python tools/validate.py --selftest
       - name: Проверка репозитория (публичный слой)
         run: python tools/validate.py
+      - name: Самотест стенда
+        run: python стенд/проверка-стенда.py --selftest
+      - name: Отрицательные пробы поставок
+        run: python tools/build_editions.py --selftest
+      - name: Сборка Start и Pro
+        run: python tools/build_editions.py --output _downloads/editions
+      - name: Архивы из общего канона
+        uses: actions/upload-artifact@v4
+        with:
+          name: iiskra-editions
+          path: _downloads/editions/*.zip
+          if-no-files-found: error
